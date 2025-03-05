@@ -1,0 +1,468 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+## Objective:
+
+The primary objective of this project is to leverage machine learning techniques and data analysis to predict the risk of heart attacks. By analyzing a comprehensive dataset containing various health and lifestyle parameters, we aim to develop a predictive model that can accurately identify individuals at high risk of experiencing a heart attack. This project seeks to explore the following research questions:
+
+**Predictive Power**: Can machine learning algorithms effectively predict the risk of heart attacks based on the provided dataset?
+
+**Feature Importance**: Which health and lifestyle factors contribute most significantly to the prediction of heart attack risk?
+
+**Model Comparison**: Which machine learning models (e.g., decision trees, random forests, logistic regression, neural networks) perform best in terms of accuracy, precision, recall, and other relevant metrics?
+
+**Data Insights**: What patterns and insights can be derived from the dataset regarding the prevalence and risk factors associated with heart attacks?
+
+
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(randomForest)
+library(ggplot2)
+library(tidyverse, warn.conflicts=FALSE)
+library(naivebayes, warn.conflicts=FALSE)
+library(rpart, warn.conflicts=FALSE)
+library(randomForest, warn.conflicts=FALSE)
+library(yardstick, warn.conflicts=FALSE)
+library(rsample, warn.conflicts=FALSE)
+```
+
+## Data Source:
+The data source is from: https://www.kaggle.com/datasets/iamsouravbanerjee/heart-attack-prediction-dataset
+
+## Original Format:
+CSV FIle 
+
+## LOad the Data
+```{r}
+# Load the dataset
+data = read.csv("C:/Users/sansk/OneDrive/Desktop/heart_attack_prediction_dataset.csv")
+
+# Inspect the first few rows of the dataset
+print("First few rows of the dataset:")
+head(data)
+```
+
+
+
+## Summary Statistics
+```{r}
+print("Summary statistics of the dataset:")
+summary(data)
+```
+
+
+Handle any missing values:
+```{r}
+# Check for missing values
+print("Count of missing values in each column:")
+missing_values <- colSums(is.na(data))
+print(missing_values)
+```
+
+
+
+Fill in Missing Values with mean (continuous):
+```{r}
+data <- data %>%
+  mutate_if(is.numeric, ~ ifelse(is.na(.), mean(., na.rm = TRUE), .))
+```
+
+
+Fill in mode for categorical features:
+```{r}
+# function to get the mode
+get_mode <- function(v) {
+  uniqv <- unique(v)
+  uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+# Apply the function to fill missing values
+data <- data %>%
+  mutate_if(is.factor, ~ ifelse(is.na(.), get_mode(.), .))
+
+```
+
+
+
+
+
+
+Check For Duplicates:
+```{r}
+# Check for duplicates
+duplicates <- data[duplicated(data), ]
+print("Duplicate rows in the dataset:")
+print(duplicates)
+```
+
+
+```{r}
+# Display the structure of the dataset
+print("Structure of the dataset:")
+str(data)
+```
+
+## Data Content:
+Number of Rows: **8,763**
+
+Number of Columns: **26**
+
+
+## Relevant Variables:
+**Patient ID**: Unique identifier for each patient.
+
+**Age**: Age of the patient.
+
+**Sex**: Gender of the patient (Male/Female).
+
+**Cholesterol**: Cholesterol level in mg/dL.
+
+**Blood Pressure**: Blood pressure reading (systolic/diastolic).
+
+**Heart Rate**: Heart rate in beats per minute.
+
+**Diabetes**: Presence of diabetes (0 = No, 1 = Yes).
+
+**Family History**: Family history of heart disease (0 = No, 1 = Yes).
+
+**Smoking**: Smoking status (0 = No, 1 = Yes).
+
+**Obesity**: Obesity status (0 = No, 1 = Yes).
+
+**Alcohol Consumption**: Frequency of alcohol consumption.
+
+**Exercise Hours Per Week**: Average hours of exercise per week.
+
+**Diet**: Type of diet (Balanced, Vegetarian, Vegan, etc.).
+
+**Previous Heart Problems**: History of heart problems (0 = No, 1 = Yes).
+
+**Medication Use**: Use of medication (0 = No, 1 = Yes).
+
+**Stress Level**: Perceived stress level.
+
+**Sedentary Hours Per Day**: Average hours spent sedentary per day.
+
+**Income**: Annual income in USD.
+
+**BMI**: Body Mass Index.
+
+**Triglycerides**: Triglyceride level in mg/dL.
+
+**Physical Activity Days Per Week**: Number of days of physical
+activity per week.
+
+**Sleep Hours Per Day**: Average hours of sleep per day.
+
+**Country**: Country of residence.
+
+**Continent**: Continent of residence.
+
+**Hemisphere**: Hemisphere of residence.
+
+**Heart Attack Risk**: Risk of heart attack (0 = No, 1 = Yes).
+
+
+## Data Transformation:
+```{r}
+# Data Transformation: Encoding Categorical Variables
+data$Sex <- ifelse(data$Sex == "Male", 1, 0)
+data$Diet <- factor(data$Diet)
+data$Country <- factor(data$Country)
+data$Continent <- factor(data$Continent)
+data$Hemisphere <- factor(data$Hemisphere)
+
+```
+
+
+
+## Data Visualization:
+```{r}
+# Age distribution
+ggplot(data, aes(x=Age)) + 
+  geom_histogram(binwidth=5, fill="blue", color="black", alpha=0.7) + 
+  labs(title="Age Distribution", x="Age", y="Count")
+```
+
+
+```{r}
+# Basic statistics for Age
+age_summary <- summary(data$Age)
+age_mean <- mean(data$Age)
+age_median <- median(data$Age)
+age_sd <- sd(data$Age)
+
+print("Age Summary:")
+print(age_summary)
+print(paste("Mean Age:", age_mean))
+print(paste("Median Age:", age_median))
+print(paste("Standard Deviation of Age:", age_sd))
+
+```
+**Age Summary:**
+
+**Central Tendency**: The mean and median ages are quite close, suggesting that the age distribution is fairly symmetric around the central values.
+
+**Spread**: The wide range between the minimum (18 years) and maximum (90 years) ages, along with the substantial standard deviation (21.25 years), indicates significant variability in the ages of individuals in the dataset.
+
+**Quartiles**: The 1st and 3rd quartiles provide a sense of the middle 50% of the data, ranging from 35 to 72 years, which shows that half of the individuals are within this age range.
+This age distribution suggests that the dataset includes a broad spectrum of ages, with a central tendency around middle age (approximately 54 years). 
+
+```{r}
+# Cholesterol levels by Age
+ggplot(data, aes(x=Age, y=Cholesterol)) + 
+  geom_point(alpha=0.5) + 
+  labs(title="Cholesterol Levels by Age", x="Age", y="Cholesterol")
+```
+
+
+```{r}
+# Basic statistics for Cholesterol
+cholesterol_summary <- summary(data$Cholesterol)
+cholesterol_mean <- mean(data$Cholesterol)
+cholesterol_median <- median(data$Cholesterol)
+cholesterol_sd <- sd(data$Cholesterol)
+
+print("Cholesterol Summary:")
+print(cholesterol_summary)
+print(paste("Mean Cholesterol:", cholesterol_mean))
+print(paste("Median Cholesterol:", cholesterol_median))
+print(paste("Standard Deviation of Cholesterol:", cholesterol_sd))
+
+# Cholesterol statistics by age group
+cholesterol_by_age <- data %>%
+  group_by(Age) %>%
+  summarize(mean_cholesterol = mean(Cholesterol),
+            median_cholesterol = median(Cholesterol),
+            sd_cholesterol = sd(Cholesterol))
+
+print("Cholesterol Statistics by Age Group:")
+print(cholesterol_by_age)
+
+```
+
+**Cholesterol summary:**
+
+**Central Tendency**: The mean and median cholesterol levels are very close, both around 259 mg/dL, indicating a symmetric distribution centered around this value.
+
+**Spread**: The range of cholesterol levels is from 120 mg/dL to 400 mg/dL, with a standard deviation of 80.86 mg/dL, suggesting a significant variation in cholesterol levels across individuals.
+
+**Quartiles**: The 1st and 3rd quartiles (192 mg/dL and 330 mg/dL, respectively) indicate that the middle 50% of the data lies within this range.
+
+
+
+```{r}
+# Heart Attack Risk by various factors
+ggplot(data, aes(x=Sex, fill=factor(Heart.Attack.Risk))) + 
+  geom_bar(position="fill") + 
+  labs(title="Heart Attack Risk by Sex", x="Sex", y="Proportion")
+```
+
+**Heart Attack risk by sex:**
+```{r}
+# Proportion of Heart Attack Risk by Sex
+heart_attack_by_sex <- data %>%
+  group_by(Sex, Heart.Attack.Risk) %>%
+  summarise(count = n(), .groups = 'drop') %>%
+  mutate(proportion = count / sum(count))
+
+
+print(heart_attack_by_sex)
+
+```
+
+
+**Heart Attack by sex summary**:
+
+**Males (Sex = 0)**:
+No Heart Attack Risk (Heart.Attack.Risk = 0):
+
+**Count**: 1,708
+**Proportion**: 19.49%
+
+Heart Attack Risk (Heart.Attack.Risk = 1):
+
+**Count**: 944
+**Proportion**: 10.77%
+
+**Females (Sex = 1)**:
+
+No Heart Attack Risk (Heart.Attack.Risk = 0):
+
+**Count**: 3,916
+**Proportion**: 44.69%
+
+Heart Attack Risk (Heart.Attack.Risk = 1):
+
+**Count**: 2,195
+**Proportion**: 25.05%
+
+**Insights**:
+
+**Gender Distribution**: 
+
+There are more females (61.6% of the total population) than males (38.4% of the total population) in the dataset.
+
+**Risk Proportions**:
+
+Among males, 10.77% are at risk of a heart attack, whereas 19.49% are not at risk.
+Among females, 25.05% are at risk of a heart attack, whereas 44.69% are not at risk.
+
+**Comparative Risk**: 
+
+**Females** have a higher proportion of individuals at risk for heart attacks (25.05%) compared to males (10.77%). However, there are also more females in the dataset overall.
+These proportions indicate that while females constitute a larger portion of the dataset, they also have a higher proportion of individuals at risk for heart attacks. This could suggest that gender-specific factors might play a significant role in heart attack risk.
+
+
+
+```{r}
+ggplot(data, aes(x=Diet, fill=factor(Heart.Attack.Risk))) + 
+  geom_bar(position="fill") + 
+  labs(title="Heart Attack Risk by Diet", x="Diet", y="Proportion")
+```
+
+
+
+```{r}
+# Proportion of Heart Attack Risk by Diet
+heart_attack_by_diet <- data %>%
+  group_by(Diet, Heart.Attack.Risk) %>%
+  summarise(count = n(), .groups = 'drop') %>%
+  mutate(proportion = count / sum(count))
+
+print(heart_attack_by_diet)
+
+```
+**Summary Heart Attack Risk by Diet:** 
+
+**Diet Distribution:** The counts of individuals with each type of diet are relatively similar, suggesting a balanced representation across different dietary habits.
+
+**Risk Proportions:**
+
+**Average Diet:** 11.71% of individuals with an average diet are at risk for heart attacks.
+
+**Healthy Diet:** 12.31% of individuals with a healthy diet are at risk for heart attacks.
+
+**Unhealthy Diet:** 11.80% of individuals with an unhealthy diet are at risk for heart attacks.
+
+**Comparative Risk:**
+
+The proportions of individuals at risk for heart attacks are slightly higher among those with a healthy diet (12.31%) compared to those with an average (11.71%) or unhealthy diet (11.80%).
+
+## Methodology
+The goal of this study is to predict heart attack risk using machine learning techniques on a dataset with various health and lifestyle parameters sourced from Kaggle. We first preprocessed the data by handling missing values, encoding categorical variables, and creating a target variable, “Outcome”, indicating heart attack risk.
+We chose to use Decision Trees and Random Forests for our models. Decision Trees were selected for their simplicity and interpretability, while Random Forests were chosen for their robustness and ability to reduce overfitting by averaging multiple decision trees. Both models handle numerical and categorical data well.
+The data was split into training (80%) and testing (20%) sets to evaluate model performance accurately. The models were trained using features such as age, sex, cholesterol levels, blood pressure, heart rate, diabetes status, family history of heart disease, smoking status, obesity, exercise habits, previous heart problems, medication use, stress levels, BMI, triglycerides, physical activity frequency, and sleep duration.
+We evaluated the models using accuracy, precision, sensitivity, and specificity. We also included ROC curves and AUC values. Additionally, the Random Forest model provided insights into feature importance, highlighting the key factors contributing to predicting heart attack risk. Overall, this approach allows us to effectively predict heart attack risk and identify significant health and lifestyle factors influencing this risk.
+
+## Modeling and Results 
+
+First, the data is cleaned up and subsequently trained for prediction. 
+```{r}
+data = data %>%   
+  mutate(Outcome = Heart.Attack.Risk)
+glimpse(data)
+```
+
+Created a new row, called 'Outcome', that will correlate to the 'Heart Attack Risk' column. '0' is now known as 'NotatRisk', and '1' is known as 'AtRisk'. 
+```{r}
+data = data %>%   
+  mutate(Outcome = as.factor(if_else(as.logical(Outcome), "AtRisk", "NotatRisk")))
+glimpse(data)
+```
+
+The data was split into a 20% testing and 80% training set. 
+```{r}
+split = initial_split(data, prop=.8)
+train = training(split)
+test = testing(split)
+glimpse(train)
+```
+
+
+RANDOM FOREST MODEL
+
+We chose factors relevant for prediction and then trained the model:
+```{r}
+set.seed(456)
+mod.rf = randomForest(Outcome ~ Age + Sex + Cholesterol + Diet + Heart.Rate + Diabetes + Family.History + Smoking + Obesity + Exercise.Hours.Per.Week + Previous.Heart.Problems + Medication.Use + Stress.Level + BMI + Triglycerides + Physical.Activity.Days.Per.Week + Sleep.Hours.Per.Day, data = train, na.action = na.omit, importance = TRUE)
+summary(mod.rf)
+```
+```{r}
+rf.test = test %>%
+  mutate(Prediction = predict(mod.rf, test, type="class"))
+glimpse(rf.test)
+```
+
+Here are the metrics on the testing data:
+```{r}
+metrics = metric_set(accuracy, precision, sensitivity, specificity)
+metrics(rf.test, truth=Outcome, estimate=Prediction)
+```
+
+ROC Curve and AUC...
+```{r}
+rf_roc = predict(mod.rf, test, type="prob") %>%
+  as_tibble() %>%
+  mutate(diff= NotatRisk - AtRisk,
+         logratio=log(NotatRisk) - log(AtRisk), 
+         pred=if_else(NotatRisk > AtRisk, "NotatRisk", "AtRisk")) %>%
+  mutate(Outcome=rf.test$Outcome)
+rf_roc
+
+rf_curve = roc_curve(rf_roc, Outcome, AtRisk)
+glimpse(rf_curve)
+
+autoplot(rf_curve)
+```
+
+```{r}
+roc_auc(rf_roc, Outcome, AtRisk)
+```
+
+```{r}
+importance(mod.rf)
+```
+
+
+DECISION TREES
+```{r}
+mod.dt = rpart(Outcome ~ Age + Sex + Cholesterol + Diet + Heart.Rate + Diabetes + Family.History + Smoking + Obesity + Exercise.Hours.Per.Week + Previous.Heart.Problems + Medication.Use + Stress.Level + BMI + Triglycerides + Physical.Activity.Days.Per.Week + Sleep.Hours.Per.Day,data = train, na.action = na.omit)
+```
+
+```{r}
+dt.test = test %>%
+  mutate(Prediction = predict(mod.dt, test, type="class"))
+glimpse(dt.test)
+```
+
+
+
+```{r}
+metrics = metric_set(accuracy, precision, sensitivity, specificity)
+metrics(dt.test, truth=Outcome, estimate=Prediction, na_rm = TRUE)
+
+```
+
+ROC Curve and AUC...
+```{r}
+dt_roc = predict(mod.dt, test, type="prob") %>%
+  as_tibble() %>%
+  mutate(diff= NotatRisk - AtRisk,
+         logratio=log(NotatRisk) - log(AtRisk), 
+         pred=if_else(NotatRisk > AtRisk, "NotatRisk", "AtRisk")) %>%
+  mutate(Outcome=rf.test$Outcome)
+dt_roc
+
+dt_curve = roc_curve(dt_roc, Outcome, AtRisk)
+glimpse(dt_curve)
+
+autoplot(dt_curve)
+```
+
+```{r}
+roc_auc(dt_roc, Outcome, AtRisk)
+```
